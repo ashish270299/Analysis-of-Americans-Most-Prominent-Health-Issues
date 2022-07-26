@@ -7,7 +7,7 @@ output: github_document
 
 ```{r setup, include=FALSE}
 require("knitr")
-opts_knit$set(root.dir = "C:/Users/BigV24/Desktop/IE6600/Hackathon")
+opts_knit$set(root.dir = "Users/ashishsharma/Downloads/Hackathon")
 ```
 
 ```{r Libraries, include=FALSE}
@@ -33,10 +33,10 @@ library(ggpubr)
 ```
 
 ```{r Data, include=FALSE}
-df_cityhealth <- read.csv("C:/Users/BigV24/Desktop/IE6600/Hackathon/city_health_2018.csv", na.strings="")
-df_city2016 <- read.csv("C:/Users/BigV24/Desktop/IE6600/Hackathon/city_health_2016.csv", na.strings="")
-df_city2017 <- read.csv("C:/Users/BigV24/Desktop/IE6600/Hackathon/city_health_2017.csv", na.strings="")
-df_city2019 <- read.csv("C:/Users/BigV24/Desktop/IE6600/Hackathon/city_health_2019.csv", na.strings="")
+df_cityhealth <- read.csv("city_health_2018.csv", na.strings="")
+df_city2016 <- read.csv("city_health_2016.csv", na.strings="")
+df_city2017 <- read.csv("city_health_2017.csv", na.strings="")
+df_city2019 <- read.csv("city_health_2019.csv", na.strings="")
 ```
 
 # Introduction
