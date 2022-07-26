@@ -1,0 +1,656 @@
+---
+title: "Analysis of American's Most Prominent Health Issues"
+author: "Ashish Sharma, Vincenzo Coppola, Akshay Dwivedi"
+date: "2/20/2022"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+require("knitr")
+opts_knit$set(root.dir = "Users/ashishsharma/Downloads/Hackathon")
+```
+
+```{r Libraries, include=FALSE}
+install.packages("rmarkdown")
+library(rmarkdown)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(magrittr)
+library(gridExtra)
+library(ggplot2)
+library(corrplot)
+library(treemapify)
+library(RColorBrewer)
+library(ggalluvial)
+library(ggfittext)
+library(ggrepel)
+library(caret)
+library(Hmisc)
+library(groupdata2)
+library(maps)
+library(usmap)
+library(plotrix)
+library(ggpubr)
+```
+
+```{r Data, include=FALSE}
+df_cityhealth <- read.csv("city_health_2018.csv", na.strings="")
+df_city2016 <- read.csv("city_health_2016.csv", na.strings="")
+df_city2017 <- read.csv("city_health_2017.csv", na.strings="")
+df_city2019 <- read.csv("city_health_2019.csv", na.strings="")
+```
+
+# Introduction
+  The "Centers for Disease Controls and Prevention" (CDC) is tasked with protecting America from "health, safety and security threats, both foreign and in the U.S.". In recent years especially with COVID-19, the CDC has claimed to have America's best interests in mind with their policies. Although it shouldn't be, the CDC has been under scrutiny in many states and has been a political discussion. Regardless of peoples' personal opinions, the health of our nation is at stake and the well being of its people is the most important thing. Therefore, the CDC "conducts critical science and provides health information that protects America against expensive and dangerous health threats" (source 5) responding when new ones arise.
+  As the public's health is absolutely a social issue, we as a group decided to take on the data surrounding America's health so we could visualize any relationships in the data and see the facts at face value. In this report we will visualize some things to answer the questions we have about America its health and the CDC's handling of the problems the US faces. As medical data is so important in the lives of the people it describes its important to use valid data and so first we will explain how we interpreted the to data to use.
+  
+```{r,include=FALSE} 
+# Fixing the original data
+df_cityhealth <- df_cityhealth %>%
+    mutate(StateDesc = recode(StateDesc,'North Carolin' = 'North Carolina', 'South Carolin' = 'South Carolina'))
+
+df_cityhealth <- df_cityhealth %>% rename(region=StateDesc)
+
+df_cityhealth$region <- tolower(df_cityhealth$region)
+
+# Remove duplicate columns manually after inspecting data
+df_cropped <- df_cityhealth %>% 
+  select(c(-StateAbbr, -GeographicLevel, -CategoryID, -UniqueID, -Data_Value_Unit,-Data_Value_Footnote, -Data_Value_Footnote_Symbol,-Geolocation,-CityFIPS,-TractFIPS,-DataValueTypeID, -DataSource)) %>% 
+  drop_na()
+
+# Downsampled data without the encoding
+set.seed(234)
+bal_data<-downSample(x=df_cropped[,],
+                   y=(as.factor(df_cropped$region)))
+
+# Assigning area to states
+
+west_coast <- bal_data %>% 
+  filter(((region=='california')|(region=='arizona')|(region=='new mexico')|(region=='nevada')|(region=='washington')|(region=='utah')|(region=='oregon')|(region=='colorado')|(region=='alaska')|(region=='hawaii'))) %>% 
+  add_column(location = 'West')
+
+east_coast <- bal_data %>% 
+  filter(((region=='maine')|(region=='new hampshire')|(region=='vermont')|(region=='new york')|(region=='massachusetts')|(region=='pennsylvania')|(region=='Rhode Island')|(region=='connecticut')|(region=='new jersey')|(region=='delaware')|(region=='maryland')|(region=='virginia')|(region=='west virginia'))) %>%
+  add_column(location = 'East')
+
+south <- bal_data %>% 
+  filter(((region=='texas')|(region=='florida')|(region=='south carolina')|(region=='north carolina')|(region=='georgia')|(region=='alabama')|(region=='arkansas')|(region=='kansas')|(region=='kentucky')|(region=='louisiana')|(region=='mississippi')|(region=='nebraska')|(region=='tennessee'))) %>%
+  add_column(location = 'South')
+
+midwest <- bal_data %>% 
+  filter(((region=='idaho')|(region=='illinois')|(region=='indiana')|(region=='iowa')|(region=='michigan')|(region=='minnesota')|(region=='missouri')|(region=='montana')|(region=='north dakota')|(region=='ohio')|(region=='oklahoma')|(region=='south dakota')|(region=='wisconsin')|(region=='wyoming'))) %>% 
+  add_column(location = 'MidWest')
+
+bal_data <- bind_rows(west_coast,east_coast,south,midwest)
+
+# Group by State and plot for downsampled outliers
+
+df_bal_state_orig <- df_cityhealth %>% 
+  group_by(region) %>% 
+  summarise("Total"=n()) %>% 
+  drop_na()
+
+bal_outliers_orig <- ggplot(df_bal_state_orig,aes(x='',y = Total), na.rm = TRUE)+geom_boxplot(col = "#016678")+geom_point(color = '#0033A1')+ labs(x='Original Data')+ theme(panel.background = element_rect(colour = "#767171"))
+
+df_bal_state <- bal_data %>% 
+  group_by(region) %>% 
+  summarise("Total"=n()) %>% 
+  drop_na()
+
+bal_outliers <- ggplot(df_bal_state,aes(x='',y = Total), na.rm = TRUE)+geom_boxplot(col = "#016678")+geom_point(color = '#0033A1',size=4)+ labs(x='Sampled Data') + theme(panel.background = element_rect(colour = "#767171"))
+
+title1 = text_grob("Distribution of Survey Before and After Sampling", size=15, face= "bold",color = "#0033A1")
+```
+ 
+  There often exists a problem in surveyed data where the number of polled people in a specific location is directly proportional to the population of that location. In other words, there are far more people polled in areas of large population than in areas of small population. This can create bias in the data when looking at the actual statistics because the numbers in the densely surveyed locations will far outweigh the totals of the lesser surveyed ones. This is a problem because that simply might not be true. 
+  Looking at our data, we hypothesized this would be the case as some states, specifically California, Texas and New York would likely be far out surveyed due to their sheer overwhelming population over states like Delaware, Michigan and Alabama. Therefore this would uncover the common social issue that comes with surveying data. In order to look into this we analyzed the distribution of the data.
+  
+```{r,include=TRUE}
+grid.arrange(bal_outliers_orig,bal_outliers,ncol=2,top =title1)
+```
+  
+  As we look at the distribution of the total data, it is clear that the original data has extreme outliers which are notably California, New York and Texas (the most populated states as hypothesized). On the right, the balanced data used in this analysis can be seen and all of the states have exact equal representation.
+  
+  Sampling like this can also have its drawbacks but we wanted to ensure that it better represented the population of the U.S. Therefore, we created three visualizations which show similar information. The first, will show how the original dataset information is distributed on the US map using the total High Blood Pressure cases surveyed.
+  
+```{r, include=FALSE}
+mapdata <- map_data("state")
+#bal_enc_data <- bal_enc_data %>% rename(region=StateDesc)
+
+#original us state map  (to show the bias)
+data_to_map1<- df_cropped %>% 
+  filter(Measure=="High blood pressure among adults aged >=18 Years") %>%
+  group_by(region) %>% 
+  summarise('TotalHBP_orig'=n())
+
+mapdata1 <- left_join(mapdata,data_to_map1,by="region") %>% arrange(desc(region))
+
+p1 <- ggplot(data = mapdata1,
+            aes(x = long, y = lat,
+                          group = group)) + geom_polygon(aes(fill=TotalHBP_orig),color="white")+labs(
+  title = "Original Survey Distribution", 
+  x = "Longitude", 
+  y = "Latitude") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face = "bold",size=10)) + scale_fill_continuous(name = "HBP Density") + theme(panel.background = element_rect(colour = "#767171"))
+```
+
+```{r, include=TRUE}
+p1
+```
+
+  As can be seen, California, Texas and New York are far and away the brightest states and all other states are relatively the same shades of blue. This would be fine if the facts are that way. Looking at the aforementioned down sampled data we see the following plot.
+
+```{r, include=FALSE} 
+#downsampled us state map with just high blood pressure sample
+data_to_map2<- bal_data %>% 
+  filter(Measure=="High blood pressure among adults aged >=18 Years") %>% 
+  group_by(region) %>% 
+  summarise('TotalHBP'=n())
+
+mapdata2<- left_join(mapdata,data_to_map2,by="region") %>% 
+  arrange(desc(region))
+
+p2 <- ggplot(data = mapdata2, aes(x = long, y = lat, group = group)) + geom_polygon(aes(fill=TotalHBP),color="white")+labs(
+  title = "Sampled Survey Distribution", 
+  x = "Longitude", 
+  y = "Latitude") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face = "bold",size=10)) + scale_fill_continuous(name = "HBP Density")+ theme(panel.background = element_rect(colour = "#767171"))
+```
+
+```{r, include=TRUE}
+p2
+```
+  
+  This shows those same the issues we hypothesized, as with out the bias in the data all the states have a much more equal representation and some other states such as Pennsylvania and Minnesota actually represent the higher High Blood Pressure regions. In order to prove that this data is more representative we found the total number of diseases per capita and plotted on the same map. In order to do this we found the number of unique cities for each state and summed up the total populations to get a state population estimate and divided the total count of diseases per state by that number respectively. With this ratio we were able to plot the per capita diseases as follows:
+
+```{r, include=FALSE} 
+# Ratio Map 
+
+unidff <- df_cropped[!duplicated(df_cropped$PopulationCount), ]
+
+map_perregion<- unidff %>% 
+  group_by(region) %>% 
+  summarise("TotalPop"= sum(PopulationCount))
+
+disease_state<-df_cropped %>% 
+  group_by(region) %>% 
+  summarise('dis_state'=n())
+
+map_state <- mutate(map_perregion,"ratio" = (disease_state$dis_state/TotalPop)*100)
+
+map_population <- left_join(mapdata,map_state,by="region") 
+
+p3 <- ggplot(data = map_population, aes(x = long, y = lat, group = group)) + geom_polygon(aes(fill=ratio,color='#0031A1'),color="white")+labs(
+  title = "Survey Distribution Per Capita", 
+  x = "Longitude", 
+  y = "Latitude") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face = "bold",size=10)) + scale_fill_continuous(name = "HBP Ratio")+ theme(panel.background = element_rect(colour = "#767171"))
+```
+
+```{r, include=TRUE}
+p3
+```
+
+  To conclude this data verification, our hypothesis was confirmed and as can be seen the per capita plot is much more represented by the down sampled data than by the original data collected by the CDC. This shows that in order to visualize the data accurately we needed to preprocess it and give a fair representation. This is an important conclusion as it clearly verifies the social issues that deal with public health survey accuracy/representation. This data is not the greatest measure of the public health of our country but in the following sections we plan to visualize some other conclusions to our hypotheses and better understand this CDC data.
+
+# Section 1: Health Issue Relationships
+  First, we looked to explore the relationships between different health issues in America. It is easy to assume that health issues such as diabetes are related to other issues such as high cholesterol. We shared this hypothesis and believed that there is likely many relationships in the issues within our data. This hypothesis raised the question:
+  
+  **Q1. How do the CDC health measures relate to each other, specifically how do the unhealthy habits relate to preventative measures, as well as a lack of health insurance?**
+  
+  Therefore, we created the following visualizations first importing additional yearly data so we could see a yearly comparison of preventative measures, unhealthy behaviors and health outcomes. 
+  
+```{r,include=FALSE}
+#### 2016 data
+df_city2016 <- df_city2016 %>%
+    mutate(StateDesc = recode(StateDesc,'North Carolin' = 'North Carolina', 'South Carolin' = 'South Carolina'))
+df_city2016
+
+df_city2016 <- df_city2016 %>% rename(region=StateDesc)
+
+df_city2016$region <- tolower(df_city2016$region)
+
+# Remove duplicate columns manually after inspecting data
+df_cropped <- df_city2016 %>% 
+  select(c(-StateAbbr, -GeographicLevel, -CategoryID, -UniqueID, -Data_Value_Unit,-Data_Value_Footnote, -Data_Value_Footnote_Symbol,-GeoLocation,-CityFIPS,-TractFIPS,-DataValueTypeID, -DataSource,-Short_Question_Text)) %>% 
+  drop_na()
+
+#downsampled data without the encoding
+set.seed(234)
+bal_data2<-downSample(x=df_cropped[,],
+                   y=(as.factor(df_cropped$region)))
+bal_data2
+
+bal_data_group <- bind_rows(bal_data,bal_data2)
+bal_data_group
+
+#### 2017 data
+
+df_city2017 <- df_city2017 %>%
+    mutate(StateDesc = recode(StateDesc,'North Carolin' = 'North Carolina', 'South Carolin' = 'South Carolina'))
+df_city2017
+
+df_city2017 <- df_city2017 %>% rename(region=StateDesc)
+
+df_city2017$region <- tolower(df_city2017$region)
+
+# Remove duplicate columns manually after inspecting data
+df_cropped <- df_city2017 %>% 
+  select(c(-StateAbbr, -GeographicLevel, -CategoryID, -UniqueID, -Data_Value_Unit,-Data_Value_Footnote, -Data_Value_Footnote_Symbol,-GeoLocation,-CityFIPS,-TractFIPS,-DataValueTypeID, -DataSource,-Short_Question_Text)) %>% 
+  drop_na()
+
+#downsampled data without the encoding
+set.seed(234)
+bal_data3<-downSample(x=df_cropped[,],
+                   y=(as.factor(df_cropped$region)))
+bal_data3
+
+bal_data_group1 <- bind_rows(bal_data_group,bal_data3)
+bal_data_group1
+
+
+#### 2019 data
+
+df_city2019 <- df_city2019 %>%
+    mutate(StateDesc = recode(StateDesc,'North Carolin' = 'North Carolina', 'South Carolin' = 'South Carolina'))
+df_city2019
+
+df_city2019 <- df_city2019 %>% rename(region=StateDesc)
+
+df_city2019$region <- tolower(df_city2019$region)
+
+# Remove duplicate columns manually after inspecting data
+df_cropped <- df_city2019 %>% 
+  select(c(-StateAbbr, -GeographicLevel, -CategoryID, -UniqueID, -Data_Value_Unit,-Data_Value_Footnote, -Data_Value_Footnote_Symbol,-GeoLocation,-CityFIPS,-TractFIPS,-DataValueTypeID, -DataSource,-Short_Question_Text)) %>% 
+  drop_na()
+
+#downsampled data without the encoding
+set.seed(234)
+bal_data4<-downSample(x=df_cropped[,],
+                   y=(as.factor(df_cropped$region)))
+bal_data4
+
+bal_data_group2<- bind_rows(bal_data_group1,bal_data4)
+bal_data_group2
+
+count_category2 <- bal_data_group2 %>% 
+  filter(Year==2014|Year==2015|Year==2016) %>% 
+  group_by(Category,Year) %>% 
+  summarise("Count"= n())
+
+line_p <- ggplot(count_category2, aes(x=Year, y=Count,group=Category)) + geom_line(aes(color=Category)) + labs(
+  title = "Comparing the Years on the Basis of Measure Category", 
+  x = "Year", 
+  y = "Total Count") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10))+ scale_fill_continuous(name = "Category")
+```
+
+```{r,include=TRUE}
+line_p
+```
+  
+  As can be seen in the line graph, as preventative measures decreased over the years, health outcomes increased and vice versa. The data clearly shows this trend and while it could be simply due to the survey it makes sense that as health prevention is not done, worse health issues arise.
+  
+  To further see relations of health issues, we created another visualization as we hypothesized that health insurance is related to these useful preventive measure such as regular doctor and dentist visits as well as cancer screenings. In the below pie charts, we visualize this hypothesis.
+  
+```{r, include=FALSE} 
+df_for_pie1 <- bal_data %>% 
+  filter(((str_detect(MeasureId, "COLON_SCREEN"))|(str_detect(MeasureId, "PAPTEST"))|(str_detect(MeasureId, "ACCESS2"))|(str_detect(MeasureId, "COREM"))|(str_detect(MeasureId, "COREW"))|(str_detect(MeasureId,"MAMMOUSE")))&((region=="massachusetts"))) %>%
+  group_by(region,MeasureId) %>% 
+  summarise('Totals_for_pie1'=n())
+
+df_for_pie2 <- bal_data %>% 
+  filter(((str_detect(MeasureId, "COLON_SCREEN"))|(str_detect(MeasureId, "PAPTEST"))|(str_detect(MeasureId, "ACCESS2"))|(str_detect(MeasureId, "COREM"))|(str_detect(MeasureId, "COREW"))|(str_detect(MeasureId,"MAMMOUSE")))&((region=="florida"))) %>%
+  group_by(region,MeasureId) %>% 
+  summarise('Totals_for_pie2'=n())
+
+df_for_pie3 <- bal_data %>% 
+  filter(((str_detect(MeasureId, "DENTAL"))|(str_detect(MeasureId, "CHECKUP"))|(str_detect(MeasureId, "ACCESS2")))&((region=="massachusetts"))) %>%
+  group_by(region,MeasureId) %>% 
+  summarise('Totals_for_pie3'=n())
+
+df_for_pie4 <- bal_data %>% 
+  filter(((str_detect(MeasureId, "DENTAL"))|(str_detect(MeasureId, "CHECKUP"))|(str_detect(MeasureId, "ACCESS2")))&((region=="florida"))) %>%
+  group_by(region,MeasureId) %>% 
+  summarise('Totals_for_pie4'=n())
+
+pielabels<-
+  c("  No Health    \nIns.","","Total Cancer \nScreenings\n")
+pielabels2<-
+  c("No Health Ins.\n","Doctor         \n Visits       \n\n","Dentist Visits")
+```
+
+```{r, include=TRUE}
+line = -1
+cex = 1.5
+side = 3
+adj=1.5
+par(mfcol=c(1,2))
+pie3D(df_for_pie1$Totals_for_pie1, labels = pielabels, explode = 0.1, col = c("#016678","#0033A1","#0033A1","#0033A1","#0033A1","#0033A1"), labelcol = "#767171", col.main = "Black")
+
+pie3D(df_for_pie2$Totals_for_pie2, labels = pielabels, explode = 0.1, col = c("#016678","#0033A1","#0033A1","#0033A1","#0033A1","#0033A1"), labelcol = "#767171", col.main = "Black")
+mtext("Lack of Insurance Vs Total Cancer\n Screening in Massachusetts and Florida", side=side, line=line, cex=cex, adj=adj)
+```
+
+```{r,include=TRUE}
+line = -1
+cex = 1.5
+side = 3
+adj=2
+par(mfcol=c(1,2))
+
+pie3D(df_for_pie3$Totals_for_pie3, labels = pielabels2, explode = 0.1, col = c("#0033A1","#016678","#016678"), labelcol = "#767171", col.main = "Black")
+
+pie3D(df_for_pie4$Totals_for_pie4, labels = pielabels2, explode = 0.1, col=c("#0033A1","#016678","#016678"), labelcol = "#767171", col.main = "Black")
+mtext("Lack of Insurance vs Doctor Visits\n in Massachusetts and Florida", side=side, line=line, cex=cex, adj=adj)
+```
+
+## Conclusion
+The data seen in this section clearly show there are relationships in the preventative health measures and the outcomes. As could be seen with the line chart these were inversely proportionate and as more clearly could be seen in the pie charts as the Lack of Access slice increased (In low income states such as Florida), the preventative measures such as doctor visit and cancer screenings both decreased. This is important data to see as it promotes the ideas of universal free healthcare.
+
+# Section 2: Demographics
+  Next, we will introduce how ages and genders may relate to health issues and preventative measures. First we will address the following question as we hypothesize there is some relation to out declining health as we age as well as depending on various genders.
+  
+**Q2. How are different types of diseases and preventives related to the demographics of America?** 
+
+  First, we aimed to visualize a trend in age and in order to do so we extracted the ages present in the health types of the data set. Plotting the totals for these age ranges and looking at the categories of health (Health Outcomes, preventative, and Unhealthy Behaviors). These categorize the data as either a health consequence/developed disease, preventative/cautious measure, or an unhealthy behavior respectively. After plotting the number of cases for each category respectively and separating them by age we can see the below plot.
+  
+```{r, include=FALSE} 
+df_eighteen <- bal_data %>% 
+  filter((str_detect(Measure, "18")|(str_detect(Measure, "21")))&((region=="california")|(region=="texas")|(region=="new york"))) %>%
+  group_by(region,Category) %>% 
+  summarise('Total_eighteens'=n())
+
+df_fifties <- bal_data %>% 
+  filter((str_detect(Measure, "5"))&((region=="california")|(region=="texas")|(region=="new york"))) %>%
+  group_by(region,Category) %>% 
+  summarise('Total_fifties'=n())
+
+df_fifties<-rbind(df_fifties, data.frame(Category = "Unhealthy Behaviors", Total_fifties = 1))
+
+df_old <- bal_data %>% 
+  filter(((str_detect(Measure, "6")|(str_detect(Measure, "7")))&((region=="california")|(region=="texas")|(region=="new york")))) %>%
+  group_by(region,Category) %>% 
+  summarise('Total_oldies'=n())
+
+eighteens <- ggplot(df_eighteen, aes(x=Category,y=Total_eighteens))+geom_bar(stat='identity',fill= "#016678")+labs(
+  x = "Category", 
+  y = "Total") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    axis.text.x = element_text(angle=45,vjust=.6,hjust=.6),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10))
+
+fifties <- ggplot(df_fifties, aes(x=Category,y=Total_fifties))+geom_bar(stat='identity',fill="#0033A1")+labs(x = "Category",y = "Total") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    axis.text.x = element_text(angle=45,vjust=.6,hjust=.6),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10))
+
+old <- ggplot(df_old, aes(x=Category,y=Total_oldies))+geom_bar(stat='identity',fill="#016678")+labs(x = "Category", y = "Total") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#0033A1",size=14,hjust = 0.6),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    axis.text.x = element_text(angle=45,vjust=.6,hjust=.6),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10))
+
+title_bar1 = text_grob("Outcomes in Different Ages", size=15, face= "bold", color='#0033A1')
+
+```
+
+```{r, include=TRUE} 
+grid.arrange(eighteens,fifties,old,ncol = 3,top=title_bar1)
+```
+
+  This tells us some useful information which may have been intuitive to hypothesize. As age increases and the plots move left to right unhealthy behaviors such as binge drinking, sleeping less than 7 hours and smoking tend to decrease while preventative measures such as vaccines and cancer screenings increase.
+
+  Next, we aimed to explore if a trend in sex exists and in order to do so we extracted the occurrences of men and women present in the health types of the dataset. In doing so it was discovered that these were mainly occurring in the preventative health concerns such as cancer screening, mammography, Papanicolaou test and colonoscopies. In order to actually visualize this we created four pie charts as seen below. We first assigned all states to a respective region based on their location. We then plotted the totals for all male preventative cases vs all female preventative cases for each region.
+
+```{r,include=FALSE}
+df_genW <- bal_data %>% 
+  filter(((str_detect(MeasureId, "PAPTEST"))|(str_detect(MeasureId, "COREW"))|(str_detect(MeasureId, "MAMMOUSE")))) %>% 
+  group_by(location) %>% 
+  summarise('Totalgen'=n()) %>% 
+  mutate(gender='women')
+
+df_genM <- bal_data %>% 
+  filter(str_detect(MeasureId, "COREM")) %>% 
+  group_by(location) %>% 
+  summarise('Totalgen'=n()) %>% 
+  mutate(gender='men')
+
+df_gender <- bind_rows(df_genW,df_genM)
+
+East_gen <- df_gender %>% 
+  filter(location=='East')
+
+East_gen$percentage=East_gen$Totalgen/sum(East_gen$Totalgen)
+East_gen$ymax=cumsum(East_gen$percentage)
+East_gen$ymin=c(0,head(East_gen$ymax,n=-1))
+
+East_gen$labelPosition <- (East_gen$ymax + East_gen$ymin) / 2
+
+# Compute a good label
+East_gen$label <- paste0(East_gen$gender, "\n value: ", East_gen$Totalgen)
+East_pie <- ggplot(East_gen, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=gender)) + geom_rect() + geom_label(x=3.5, aes(y=labelPosition, label=label),color='white', size=3) + scale_fill_manual(values = c("#016678","#0033A1"),guide = FALSE) +
+  coord_polar(theta="y") +
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# West
+West_gen <- df_gender %>% 
+  filter(location=='West')
+
+West_gen$percentage=West_gen$Totalgen/sum(West_gen$Totalgen)
+West_gen$ymax=cumsum(West_gen$percentage)
+West_gen$ymin=c(0,head(West_gen$ymax,n=-1))
+
+West_gen$labelPosition <- (West_gen$ymax + West_gen$ymin) / 2
+
+# Compute a good label
+West_gen$label <- paste0(West_gen$gender, "\n value: ", West_gen$Totalgen)
+west_pie <- ggplot(West_gen, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=gender)) + geom_rect() + geom_label(x=3.5, aes(y=labelPosition, label=label),color='white',size=3) + scale_fill_manual(values = c("#016678","#0033A1"),guide = FALSE) +
+  coord_polar(theta="y") +
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# Midwest
+mid_gen <- df_gender %>% 
+  filter(location=='MidWest')
+
+mid_gen$percentage=mid_gen$Totalgen/sum(mid_gen$Totalgen)
+mid_gen$ymax=cumsum(mid_gen$percentage)
+mid_gen$ymin=c(0,head(mid_gen$ymax,n=-1))
+
+mid_gen$labelPosition <- (mid_gen$ymax + mid_gen$ymin) / 2
+
+# Compute a good label
+mid_gen$label <- paste0(mid_gen$gender, "\n value: ", mid_gen$Totalgen)
+midwest_pie <- ggplot(mid_gen, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=gender)) + geom_rect() + geom_label(x=3.5, aes(y=labelPosition, label=label),color='white', size=3) + scale_fill_manual(values = c("#016678","#0033A1"),guide = FALSE) +
+  coord_polar(theta="y") +
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# South
+south_gen <- df_gender %>% 
+  filter(location=='South')
+
+south_gen$percentage=south_gen$Totalgen/sum(south_gen$Totalgen)
+south_gen$ymax=cumsum(south_gen$percentage)
+south_gen$ymin=c(0,head(south_gen$ymax,n=-1))
+
+south_gen$labelPosition <- (south_gen$ymax + south_gen$ymin) / 2
+
+# Compute a good label
+south_gen$label <- paste0(south_gen$gender, "\n value: ", south_gen$Totalgen)
+south_pie <- ggplot(south_gen, aes(ymax=ymax, ymin=ymin, xmax=4, xmin=3, fill=gender)) + geom_rect() + geom_label(x=3.5, aes(y=labelPosition, label=label),color='white', size=3) + scale_fill_manual(values = c("#016678","#0033A1"),guide = FALSE) +
+  coord_polar(theta="y") +
+  xlim(c(2, 4)) +
+  theme_void() +
+  theme(legend.position = "none")
+title_pie2d <- text_grob("Distribution of Preventative Health Measures Based on Sex", size=15, face= "bold", color = '#0033A1')
+```
+
+```{r,include=TRUE}
+grid.arrange(west_pie, East_pie, midwest_pie, south_pie,nrow=2,ncol=2,top= title_pie2d)
+```
+
+  From the data visualizations, it is easily noticeable that the preventative measures surveyed for females far outweigh the measures taken for men. The pie charts are very distinctly separated and the trend is consistent for all regions regardless of location in the country.
+  
+## Conclusion
+  Are these trends truly the case in the U.S.? Do we as a country truly increase our preventative measures and decrease our unhealthy behaviors as we get older? Does sex have an impact on the preventative measures taken for adults in that women are more likely to be screened for health concerns? The data suggests both to be true and it intuitively makes sense based on real life experiences but to truly confirm the trend more information should be collected by the CDC regarding the demographics of the U.S. and the people who they survey individually. 
+
+# Section 3 - Location
+  Finally, as the name of the data set suggests, we wanted to look at just how the 500 cities, or the locations for that matter play a role in American health. To do this, we explored with two different visualizations to answer the following question.
+  
+  **Q3. How do location factors effect the different types of health issues in an area?** 
+  
+  In order to address this, we first wanted to look into how types of health issues are distributed for individual states in various areas of the U.S. or areas of differing climates and political views. In order to do so we created the following four tree maps showing the differences in health issues for Alaska and Florida as well as New Jersey and Minnesota. These four states show varying climates and regions from very cold in Alaska to slightly warmer Minnesota to an Atlantic New Jersey and finally to a more topical Florida. The following are those results.
+  
+```{r, include=FALSE}
+df_for_tree <- bal_data %>% 
+  select(c(region,Short_Question_Text,Category)) %>% 
+  group_by(region,Short_Question_Text,Category) %>% 
+  summarise('diff_meas_tot'=n()) %>% 
+  left_join(map_state,by='region') %>% 
+  mutate('meas_ratio'=(diff_meas_tot*ratio))
+
+a1 <- df_for_tree %>% 
+  filter(region=="alaska")
+
+alaska_tree<-ggplot(a1, aes(area=meas_ratio, label=Short_Question_Text, subgroup=Category, fill=Category)) + geom_treemap() + ggtitle("Alaska") + geom_treemap_text(colour = "white", place = "centre", min.size= '1') + scale_fill_manual(values = c("#767171","#0033A9","#016678"))
+
+a2 <- df_for_tree %>% 
+  filter(region=="florida") 
+
+florida_tree <- ggplot(a2, aes(area=meas_ratio, label=Short_Question_Text, subgroup=Category, fill=Category)) + geom_treemap() + ggtitle("Florida") + geom_treemap_text(colour = "white", place = "centre", min.size= '1') + scale_fill_manual(values = c("#767171","#0033A9","#016678"))
+
+a3 <- df_for_tree %>% 
+  filter(region=="new jersey")
+
+nj_tree<-ggplot(a3, aes(area=meas_ratio, label=Short_Question_Text, subgroup=Category, fill=Category)) + geom_treemap() + ggtitle("New Jersey") + geom_treemap_text(colour = "white", place = "centre", min.size= '1') + scale_fill_manual(values = c("#767171","#0033A9","#016678"))
+
+a4 <- df_for_tree %>% 
+  filter(region=="minnesota") 
+
+minn_tree <- ggplot(a4, aes(area=meas_ratio, label=Short_Question_Text, subgroup=Category, fill=Category )) + geom_treemap() + ggtitle("Minnesota") + geom_treemap_text(colour = "white", place = "centre", min.size= '1')+scale_fill_manual(values = c("#767171","#0033A9","#016678"))
+
+title_tree= text_grob("Climate / Locational Distributions of Diseases", size=15, face= "bold",color='#0033A1')
+```
+
+```{r,include=TRUE}
+grid.arrange(florida_tree,alaska_tree,nrow=2,top=title_tree)
+grid.arrange(minn_tree,nj_tree,nrow=2,top=title_tree)
+```
+
+  As can be seen, there are many variances in the data from the tree maps. Namely the warmer state in Florida has far more frequency of Binge Drinking and unhealthy behaviors as well as a greater lack of access to health insurance. Whereas, Minnesota representing mid-western climates shows a higher frequency of high blood pressure population. Alaska represents a greater frequency of preventative measures for women and finally new jersey shows a great difference from the others in yearly dental visits, mental health issues and Asthma. 
+ 
+```{r, include=FALSE}
+df_bar <- bal_data %>% 
+  filter(MeasureId == "OBESITY") %>% 
+  group_by(region,location) %>% 
+  summarise("count_obe"=n(),.groups='drop') %>%  
+  arrange(desc(count_obe)) %>% 
+  head(10)
+
+barp1 <- ggplot(df_bar,aes(x=reorder(region,-count_obe),y=count_obe,fill=location))+geom_bar(stat='identity')+scale_fill_manual(values=c("#0033A1","#767171","#82B94E","#016678")) + labs(
+  title = 'Obesity',
+  x = "States", 
+  y = "Total Count") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#000000",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10),
+    axis.text.x = element_text(angle=45,vjust=0.5,hjust=0.5))
+
+df_bar1 <- bal_data %>% 
+  filter(MeasureId == "HIGHCHOL") %>% 
+  group_by(region,location) %>% 
+  summarise("count_chol"=n(),.groups='drop') %>%  
+  arrange(desc(count_chol)) %>% 
+  head(10)
+
+barp2 <- ggplot(df_bar1,aes(x=reorder(region,-count_chol),y=count_chol,fill=location))+geom_bar(stat='identity')+scale_fill_manual(values=c("#767171","#82B94E","#016678")) + labs(
+  title = 'High Cholesterol',
+  x = "States", 
+  y = "Total Count") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#000000",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10),
+    axis.text.x = element_text(angle=45,vjust=0.5,hjust=0.5))
+
+df_bar2 <- bal_data %>% 
+  filter(MeasureId == "CANCER") %>% 
+  group_by(region,location) %>% 
+  summarise("count_cancer"=n(),.groups='drop') %>%  
+  arrange(desc(count_cancer)) %>% 
+  head(10)
+
+barp3 <- ggplot(df_bar2,aes(x=reorder(region,-count_cancer),y=count_cancer,fill=location))+geom_bar(stat='identity')+scale_fill_manual(values=c("#0033A1","#767171","#82B94E"))+ labs(
+  title = 'Cancer',
+  x = "States", 
+  y = "Total Count") + theme(
+    plot.title = element_text(family="sans",
+    face="bold",color="#000000",size=14,hjust = 0.5),
+    axis.title.x = element_text(family="sans",face = "bold", size=10),
+    axis.title.y = element_text(family="sans",face = "bold", size=10),
+    legend.title = element_text(family="sans",face =
+    "bold",size=10),
+    axis.text.x = element_text(angle=45,vjust=0.5,hjust=0.5))
+
+title_bar2 <- text_grob("Measures in Different Regions of United States ", size=15, face= "bold",color="#0033A1")
+```
+ 
+ We then decided to look into the regions more specifically as East, Midwest, South and West to see how the differences would again appear. To do this we created the three following visualizations containing the top 10 states in frequency of health issues. The three health issues analyzed were obesity, high cholesterol, and cancer as these are three of the most major issues that Americans face. Below the top ten states can be seen plotted as bars with color correlating to one of the four regions.
+ 
+```{r, include=TRUE}
+grid.arrange(barp1,barp2,barp3,nrow=2,ncol=2,top=title_bar2)
+```
+
+## Conclusion
+  In conclusion, location definitely does show a difference for health issues. As can be seen, warmer locations like Florida have more unhealthy habits possibly due to the party culture. It also has less access to health insurance compared to New Jersey which has a great deal of insurance access. This could be attributed to the incomes of each state as New Jersey is a high income state and Florida is not. The bar charts show a different story but also confirm the location effect. In the south, Obesity and Cancer are very dominant compared to the other regions. Meanwhile, high cholesterol while also prominent in the South is a major issue in the Mid West. Overall, regions like the East and West appear healthier in the data which can possibly be attributed to the high incomes there as well as healthier habits. 
+
+# Final Conclusion
+  Overall, the U.S. City Health data provided by the CDC was quite revealing but to ensure that the facts were accurate it did take a great deal of pre-processing. Overall, we examined the social issues that come with biased data from government surveys. We then managed to explore a wide array of factors such as income, location, prevention vs outcome, age, gender and even climate. Through a variety of different visualization methods we were able to wrangle the data and provide meaningful answers to our questions as well as prove/disprove our hypotheses. The data speaks for itself and although it may not be the best accumulation or representation of the U.S. in data form, we were able to tell a story about the health of the United States. 
+  The CDC claims to have America's citizens' well being as the forefront of there mission. We discovered that their data holds so much information to understanding the facts regarding the Nation's health and the trends that lie beneath. In visualizing the data, we can better understand the facts and if we can best understand the facts we can better prepare for the future of a Nation's health. 
+  
+# Sources
+1. https://www.kaggle.com/jennifersantiago/500-cities-local-data-for-better-health-2018
+2. https://chronicdata.cdc.gov/500-Cities-Places/500-Cities-Local-Data-for-Better-Health-2018-relea/rja3-32tc
+3. https://www.youtube.com/watch?v=AgWgPSZ7Gp0
+4. https://cran.r-project.org/web/packages/plotrix/plotrix.pdf
+5. https://worldpopulationreview.com/state-rankings/average-income-by-state
