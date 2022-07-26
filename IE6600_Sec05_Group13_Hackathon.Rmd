@@ -1,8 +1,8 @@
 ---
 title: "Analysis of American's Most Prominent Health Issues"
-author: "Vincenzo Coppola, Ashish Sharma, Akshay Dwivedi"
+author: "Ashish Sharma, Vincenzo Coppola, Akshay Dwivedi"
 date: "2/20/2022"
-output: html_document
+output: github_document
 ---
 
 ```{r setup, include=FALSE}
